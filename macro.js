@@ -121,7 +121,7 @@ function createSheetsAndGenerateStyledPDF() {
       "<script>document.getElementById('pdfLink').click();</script>" +
       "</body></html>"
     );
-    SpreadsheetApp.getUi().showModalDialog(htmlOutput, 'Downloading PDF...');
+    SpreadsheetApp.getUi().showModalDialog(htmlOutput, 'File Downloaded Shortly');
  
     // Remove the created sheets
     for (var i = 0; i < createdSheets.length; i++) {
