@@ -6,11 +6,6 @@ This script automates the creation of new sheets based on data from a source she
 ## Prerequisites
 1. A Google Spreadsheet with a source sheet named "Sheet1".
 2. Google Apps Script enabled for the Google Spreadsheet.
-3. Data in "Sheet1" should be formatted correctly:
-    - First column: Division
-    - Second column: Pallet Number
-    - Third column: Customer
-    - Subsequent columns: Product data (names and quantities).
 
 ## Setup and Execution
 
