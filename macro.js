@@ -1,29 +1,84 @@
-function createSheetsAndGenerateStyledPDF() {
+function generateDivisionPalletPDF() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var sourceSheet = ss.getSheetByName('Sheet1');
+  var sheets = ss.getSheets();
+  var sheetNames = sheets.map(function(sheet) {
+    return sheet.getName();
+  });
 
-  // Check if the sheet exists
+  var ui = SpreadsheetApp.getUi();
+  var htmlOutput = HtmlService.createHtmlOutput('<html><body>' +
+    '<style>' +
+    'body { font-family: Arial, sans-serif; }' +
+    'form { text-align: center; }' +
+    'select { padding: 10px; font-size: 16px; margin-bottom: 20px; }' +
+    'input[type="button"] { padding: 10px 20px; font-size: 16px; margin: 5px; cursor: pointer; }' +
+    'input[type="button"]:hover { background-color: #ddd; }' +
+    '</style>' +
+    '<form id="sheetForm">' +
+    '<label for="sheet">Select a sheet:</label><br><br>' +
+    '<select id="sheet" name="sheet">' +
+    sheetNames.map(function(name) {
+      return '<option value="' + name + '">' + name + '</option>';
+    }).join('') +
+    '</select><br><br>' +
+    '<input type="button" value="Submit" onclick="google.script.run.withSuccessHandler(closeDialog).processForm(document.getElementById(\'sheet\').value)">' +
+    '<input type="button" value="Cancel" onclick="google.script.host.close()">' +
+    '</form>' +
+    '<script>' +
+    'function closeDialog() { google.script.host.close(); }' +
+    '</script>' +
+    '</body></html>')
+    .setWidth(300)
+    .setHeight(200);
+  ui.showModalDialog(htmlOutput, 'Select Sheet');
+}
+
+function processForm(sheetName) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sourceSheet = ss.getSheetByName(sheetName);
+
   if (!sourceSheet) {
-    Logger.log("Sheet 'Sheet1' not found");
-    SpreadsheetApp.getUi().alert("Sheet 'Sheet1' not found. Please ensure the sheet exists.");
+    Logger.log("Sheet '" + sheetName + "' not found");
+    SpreadsheetApp.getUi().alert("Sheet '" + sheetName + "' not found. Please ensure the sheet exists.");
     return;
   }
 
   var data = sourceSheet.getDataRange().getValues();
   var createdSheets = [];
 
-  // Initialize variables
+  var startRow = -1;
+  var startColumn = -1;
+  for (var i = 0; i < data.length; i++) {
+    for (var j = 0; j < data[i].length; j++) {
+      if (data[i][j] && data[i][j].toString().toUpperCase() === 'PALLET BEGINS') {
+        startRow = i + 1;
+        startColumn = j;
+        break;
+      }
+    }
+    if (startRow !== -1) break;
+  }
+
+  if (startRow === -1) {
+    Logger.log("'Pallet Begins' not found");
+    SpreadsheetApp.getUi().alert("'Pallet Begins' not found. Please ensure the keyword is present.");
+    return;
+  }
+
+  var divisionColumn = startColumn + 3;
+  var palletNoColumn = startColumn + 1;
+  var customerNameColumn = startColumn + 2;
+
   var currentDivision = '';
   var currentCustomer = '';
   var currentPalletNo = '';
   var totalPallets = 0;
 
-  // Calculate total pallets for each division
   var divisionPalletCount = {};
-  for (var i = 1; i < data.length; i++) {
+  for (var i = startRow + 1; i < data.length; i++) {
     var row = data[i];
-    if (row[0] && row[0].toUpperCase() !== 'TOTAL') {
-      currentDivision = row[0];
+    if (row[divisionColumn] && row[divisionColumn].toUpperCase() !== 'TOTAL') {
+      currentDivision = row[divisionColumn];
       if (!divisionPalletCount[currentDivision]) {
         divisionPalletCount[currentDivision] = 1;
       } else {
@@ -33,25 +88,23 @@ function createSheetsAndGenerateStyledPDF() {
   }
 
   currentDivision = '';
-  for (var i = 1; i < data.length; i++) {
+  var lastPalletProcessed = false;
+  for (var i = startRow + 1; i < data.length; i++) {
     var row = data[i];
 
-    // Skip the "TOTAL" row
-    if (row[0].toUpperCase() === 'TOTAL') {
+    if (row[divisionColumn].toUpperCase() === 'TOTAL') {
       continue;
     }
 
-    // Check for new division
-    if (row[0] && row[0].toUpperCase() !== 'TOTAL') {
-      currentDivision = row[0];
-      currentPalletNo = row[1];
-      currentCustomer = row[2];
+    if (row[divisionColumn] && row[divisionColumn].toUpperCase() !== 'TOTAL') {
+      currentDivision = row[divisionColumn];
+      currentPalletNo = row[palletNoColumn];
+      currentCustomer = row[customerNameColumn];
       totalPallets = divisionPalletCount[currentDivision];
       var sheetName = currentDivision + " " + currentPalletNo + " OF " + totalPallets;
-      
-      // Check for invalid characters in sheet name
+
       sheetName = sheetName.replace(/[\/:*?"<>|]/g, '-');
-      
+
       var sheet = ss.getSheetByName(sheetName);
 
       if (!sheet) {
@@ -59,90 +112,100 @@ function createSheetsAndGenerateStyledPDF() {
         createdSheets.push(sheet);
         sheet.appendRow([currentDivision + " " + currentPalletNo + " OF " + totalPallets]);
         sheet.appendRow([currentCustomer]);
-        // Skip adding the third row
         sheet.appendRow(['Product name', 'Quantity']);
 
-        // Merge A1 and A2, style headers
-        sheet.getRange('A1:B1').merge().setFontWeight('bold').setFontSize(14).setHorizontalAlignment('center').setVerticalAlignment('middle');
-        sheet.getRange('A2:B2').merge().setFontWeight('bold').setFontSize(12).setHorizontalAlignment('center').setVerticalAlignment('middle');
-        sheet.getRange('A3:B3').setFontWeight('bold').setFontSize(12).setBackground('#f2f2f2').setBorder(true, true, true, true, true, true).setHorizontalAlignment('center').setVerticalAlignment('middle');
+        sheet.getRange('A1:B1').merge().setFontWeight('bold').setFontSize(24).setHorizontalAlignment('center').setVerticalAlignment('middle');
+        sheet.getRange('A2:B2').merge().setFontWeight('bold').setFontSize(18).setHorizontalAlignment('center').setVerticalAlignment('middle');
+        sheet.getRange('A3:B3').setFontWeight('bold').setFontSize(16).setBackground('#f2f2f2').setBorder(true, true, true, true, true, true).setHorizontalAlignment('center').setVerticalAlignment('middle');
 
-        // Center the table on the page
-        sheet.setColumnWidths(1, 2, 300); // Increased column width to accommodate longer text
-        sheet.setRowHeights(1, 3, 25);
+        sheet.setColumnWidths(1, 2, 300);
+        sheet.setRowHeights(1, 3, 50);
+        sheet.setRowHeight(2, 90);
       }
     }
 
-    // Add product data with alternating row colors
-    for (var j = 3; j < data[0].length; j++) {
-      if (row[j] && !isNaN(row[j])) {
-        var newRow = sheet.appendRow([data[0][j], row[j]]);
+    var totalQuantity = 0;
+    for (var j = startColumn + 3; j < data[startRow].length; j++) {
+      var productName = data[startRow][j];
+      var quantity = row[j];
+      if (productName && productName.toUpperCase() !== 'TOTAL' && quantity && !isNaN(quantity) && quantity > 0) {
+        var newRow = sheet.appendRow([productName, quantity]);
+        totalQuantity += quantity;
         var lastRow = sheet.getLastRow();
         var range = sheet.getRange('A' + lastRow + ':B' + lastRow);
         range.setBorder(true, true, true, true, true, true).setFontWeight('normal').setBackground(null).setHorizontalAlignment('center').setVerticalAlignment('middle');
         if (lastRow % 2 === 0) {
-          range.setBackground('#f9f9f9'); // Light grey background for even rows
+          range.setBackground('#f9f9f9');
         } else {
-          range.setBackground('#ffffff'); // White background for odd rows
+          range.setBackground('#ffffff');
         }
-        sheet.getRange('A' + lastRow).setFontSize(10); // Ensure consistent font size for all products
+        sheet.getRange('A' + lastRow).setFontSize(14);
+        sheet.getRange('B' + lastRow).setFontSize(14);
+        sheet.setRowHeight(lastRow, 40);
       }
+    }
+
+    var totalRow = sheet.appendRow(['TOTAL', totalQuantity]);
+    var lastRow = sheet.getLastRow();
+    var totalRange = sheet.getRange('A' + lastRow + ':B' + lastRow);
+    totalRange.setFontWeight('bold').setFontSize(16).setBackground('#f2f2f2').setBorder(true, true, true, true, true, true).setHorizontalAlignment('center').setVerticalAlignment('middle');
+
+    if (parseInt(currentPalletNo) == totalPallets) {
+      lastPalletProcessed = true;
+      break;
     }
   }
 
-  // Create a temporary spreadsheet and copy created sheets to it
-  var tempSpreadsheet = SpreadsheetApp.create('Temp Spreadsheet for PDF');
-  var tempSsId = tempSpreadsheet.getId();
-  var tempSs = SpreadsheetApp.openById(tempSsId);
+  if (lastPalletProcessed) {
+    var tempSpreadsheet = SpreadsheetApp.create('Temp Spreadsheet for PDF');
+    var tempSsId = tempSpreadsheet.getId();
+    var tempSs = SpreadsheetApp.openById(tempSsId);
 
-  createdSheets.forEach(function(sheet) {
-    sheet.copyTo(tempSs).setName(sheet.getName());
-  });
+    createdSheets.forEach(function (sheet) {
+      sheet.copyTo(tempSs).setName(sheet.getName());
+    });
 
-  // Remove the default "Sheet1" in the temporary spreadsheet
-  var tempSheet = tempSs.getSheetByName('Sheet1');
-  if (tempSheet) {
-    tempSs.deleteSheet(tempSheet);
+    var tempSheet = tempSs.getSheetByName('Sheet1');
+    if (tempSheet) {
+      tempSs.deleteSheet(tempSheet);
+    }
+
+    var url = 'https://docs.google.com/spreadsheets/d/' + tempSsId + '/export?';
+    var url_ext = 'exportFormat=pdf&format=pdf' +
+      '&size=A4' +
+      '&portrait=true' +
+      '&fitw=true' +
+      '&sheetnames=false&printtitle=false' +
+      '&pagenumbers=false&gridlines=false' +
+      '&fzr=false';
+
+    var token = ScriptApp.getOAuthToken();
+    var response = UrlFetchApp.fetch(url + url_ext, {
+      headers: {
+        'Authorization': 'Bearer ' + token
+      },
+      muteHttpExceptions: true
+    });
+
+    if (response.getResponseCode() == 200) {
+      var pdfBlob = response.getBlob().setName(ss.getName() + '.pdf');
+      var base64data = Utilities.base64Encode(pdfBlob.getBytes());
+      var pdfData = 'data:application/pdf;base64,' + base64data;
+
+      var htmlOutput = HtmlService.createHtmlOutput(
+        "<html><body>" +
+        "<a id='pdfLink' href='" + pdfData + "' download='" + ss.getName() + ".pdf'></a>" +
+        "<script>document.getElementById('pdfLink').click();</script>" +
+        "</body></html>"
+      );
+      SpreadsheetApp.getUi().showModalDialog(htmlOutput, 'File Downloaded Shortly');
+    } else {
+      Logger.log("Failed to fetch PDF with response code: " + response.getResponseCode());
+    }
+
+    createdSheets.forEach(function (sheet) {
+      ss.deleteSheet(sheet);
+    });
+    DriveApp.getFileById(tempSsId).setTrashed(true);
   }
-
-  // Export the temporary spreadsheet as PDF
-  var url = 'https://docs.google.com/spreadsheets/d/' + tempSsId + '/export?';
-  var url_ext = 'exportFormat=pdf&format=pdf' +
-                '&size=A4' +
-                '&portrait=true' +
-                '&fitw=true' +
-                '&sheetnames=false&printtitle=false' +
-                '&pagenumbers=false&gridlines=false' +
-                '&fzr=false';
-
-  var token = ScriptApp.getOAuthToken();
-  var response = UrlFetchApp.fetch(url + url_ext, {
-    headers: {
-      'Authorization': 'Bearer ' + token
-    },
-    muteHttpExceptions: true
-  });
-
-  if (response.getResponseCode() == 200) {
-    var pdfBlob = response.getBlob().setName(ss.getName() + '.pdf');
-    var base64data = Utilities.base64Encode(pdfBlob.getBytes());
-    var pdfData = 'data:application/pdf;base64,' + base64data;
-
-    // Generate a HTML output to automatically download the PDF
-    var htmlOutput = HtmlService.createHtmlOutput(
-      "<html><body>" +
-      "<a id='pdfLink' href='" + pdfData + "' download='" + ss.getName() + ".pdf'></a>" +
-      "<script>document.getElementById('pdfLink').click();</script>" +
-      "</body></html>"
-    );
-    SpreadsheetApp.getUi().showModalDialog(htmlOutput, 'File Downloaded Shortly');
-  } else {
-    Logger.log("Failed to fetch PDF with response code: " + response.getResponseCode());
-  }
-
-  // Clean up: remove created sheets and temporary spreadsheet
-  createdSheets.forEach(function(sheet) {
-    ss.deleteSheet(sheet);
-  });
-  DriveApp.getFileById(tempSsId).setTrashed(true);
 }
