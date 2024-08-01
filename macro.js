@@ -1,7 +1,7 @@
 function generateDivisionPalletPDF() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var sheets = ss.getSheets();
-  var sheetNames = sheets.map(function(sheet) {
+  var sheetNames = sheets.map(function (sheet) {
     return sheet.getName();
   });
 
@@ -17,11 +17,11 @@ function generateDivisionPalletPDF() {
     '<form id="sheetForm">' +
     '<label for="sheet">Select a sheet:</label><br><br>' +
     '<select id="sheet" name="sheet">' +
-    sheetNames.map(function(name) {
+    sheetNames.map(function (name) {
       return '<option value="' + name + '">' + name + '</option>';
     }).join('') +
     '</select><br><br>' +
-    '<input type="button" value="Submit" onclick="google.script.run.withSuccessHandler(closeDialog).processForm(document.getElementById(\'sheet\').value)">' +
+    '<input type="button" value="Submit" onclick="google.script.run.withSuccessHandler(closeDialog).processForm(document.getElementById(\'sheet\').value);google.script.host.close();">' +
     '<input type="button" value="Cancel" onclick="google.script.host.close()">' +
     '</form>' +
     '<script>' +
@@ -50,7 +50,7 @@ function processForm(sheetName) {
   var startColumn = -1;
   for (var i = 0; i < data.length; i++) {
     for (var j = 0; j < data[i].length; j++) {
-      if (data[i][j] && data[i][j].toString().toUpperCase() === 'PALLET BEGINS') {
+      if (data[i][j] && data[i][j].toString().toUpperCase() === 'PALLET TABLE') {
         startRow = i + 1;
         startColumn = j;
         break;
@@ -121,6 +121,9 @@ function processForm(sheetName) {
         sheet.setColumnWidths(1, 2, 300);
         sheet.setRowHeights(1, 3, 50);
         sheet.setRowHeight(2, 90);
+
+        // Center the content
+        sheet.getRange('A1:B').setHorizontalAlignment('center');
       }
     }
 
@@ -132,6 +135,7 @@ function processForm(sheetName) {
         var newRow = sheet.appendRow([productName, quantity]);
         totalQuantity += quantity;
         var lastRow = sheet.getLastRow();
+        sheet.setRowHeight(lastRow, 60);  
         var range = sheet.getRange('A' + lastRow + ':B' + lastRow);
         range.setBorder(true, true, true, true, true, true).setFontWeight('normal').setBackground(null).setHorizontalAlignment('center').setVerticalAlignment('middle');
         if (lastRow % 2 === 0) {
@@ -149,6 +153,7 @@ function processForm(sheetName) {
     var lastRow = sheet.getLastRow();
     var totalRange = sheet.getRange('A' + lastRow + ':B' + lastRow);
     totalRange.setFontWeight('bold').setFontSize(16).setBackground('#f2f2f2').setBorder(true, true, true, true, true, true).setHorizontalAlignment('center').setVerticalAlignment('middle');
+    sheet.setRowHeight(lastRow , 50)
 
     if (parseInt(currentPalletNo) == totalPallets) {
       lastPalletProcessed = true;
@@ -177,7 +182,11 @@ function processForm(sheetName) {
       '&fitw=true' +
       '&sheetnames=false&printtitle=false' +
       '&pagenumbers=false&gridlines=false' +
-      '&fzr=false';
+      '&fzr=false' +
+      '&top_margin=0.75' +
+      '&bottom_margin=0.75' +
+      '&left_margin=1.5' +  // Increased left margin
+      '&right_margin=1.5';  // Increased right margin
 
     var token = ScriptApp.getOAuthToken();
     var response = UrlFetchApp.fetch(url + url_ext, {
