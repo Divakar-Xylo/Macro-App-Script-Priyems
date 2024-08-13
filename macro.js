@@ -45,6 +45,7 @@ function processForm(sheetName) {
 
   var data = sourceSheet.getDataRange().getValues();
   var createdSheets = [];
+  var productTotals = {};
 
   var startRow = -1;
   var startColumn = -1;
@@ -134,8 +135,16 @@ function processForm(sheetName) {
       if (productName && productName.toUpperCase() !== 'TOTAL' && quantity && !isNaN(quantity) && quantity > 0) {
         var newRow = sheet.appendRow([productName, quantity]);
         totalQuantity += quantity;
+
+        // Update the product totals
+        if (productTotals[productName]) {
+          productTotals[productName] += quantity;
+        } else {
+          productTotals[productName] = quantity;
+        }
+
         var lastRow = sheet.getLastRow();
-        sheet.setRowHeight(lastRow, 60);  
+        sheet.setRowHeight(lastRow, 60);
         var range = sheet.getRange('A' + lastRow + ':B' + lastRow);
         range.setBorder(true, true, true, true, true, true).setFontWeight('normal').setBackground(null).setHorizontalAlignment('center').setVerticalAlignment('middle');
         if (lastRow % 2 === 0) {
@@ -153,13 +162,56 @@ function processForm(sheetName) {
     var lastRow = sheet.getLastRow();
     var totalRange = sheet.getRange('A' + lastRow + ':B' + lastRow);
     totalRange.setFontWeight('bold').setFontSize(16).setBackground('#f2f2f2').setBorder(true, true, true, true, true, true).setHorizontalAlignment('center').setVerticalAlignment('middle');
-    sheet.setRowHeight(lastRow , 50)
+    sheet.setRowHeight(lastRow, 50);
 
     if (parseInt(currentPalletNo) == totalPallets) {
       lastPalletProcessed = true;
       break;
     }
   }
+
+  // Create the Summary sheet
+  var summarySheet = ss.insertSheet('Summary');
+  summarySheet.appendRow(['Summary']);
+  summarySheet.appendRow(['Product', 'Quantity']);
+
+  summarySheet.getRange('A1:B1').merge().setFontWeight('bold').setFontSize(24)
+    .setHorizontalAlignment('center').setVerticalAlignment('middle');
+  summarySheet.getRange('A2:B2').setFontWeight('bold').setFontSize(18)
+    .setBackground('#f2f2f2').setHorizontalAlignment('center').setVerticalAlignment('middle');
+
+  summarySheet.setColumnWidths(1, 2, 300);
+  summarySheet.setRowHeights(1, 3, 50);
+  summarySheet.setRowHeight(2, 50);
+
+  var totalQuantitySum = 0;
+  var rowNumber = 3;
+  for (var product in productTotals) {
+    var quantity = productTotals[product];
+    summarySheet.appendRow([product, quantity]);
+
+    // Update the total quantity sum
+    totalQuantitySum += quantity;
+
+    var lastRow = summarySheet.getLastRow();
+    summarySheet.getRange('A' + lastRow + ':B' + lastRow).setBorder(true, true, true, true, true, true)
+      .setFontWeight('normal').setFontSize(16).setBackground(null)
+      .setHorizontalAlignment('center').setVerticalAlignment('middle');
+    summarySheet.setRowHeight(lastRow, 40);
+    rowNumber++;
+  }
+
+  // Insert the Total Quantity row
+  summarySheet.appendRow(['TOTAL', totalQuantitySum]);
+
+  var lastRow = summarySheet.getLastRow();
+  summarySheet.getRange('A' + lastRow + ':B' + lastRow).setBorder(true, true, true, true, true, true)
+    .setFontWeight('bold').setFontSize(16).setBackground('#f2f2f2')
+    .setHorizontalAlignment('center').setVerticalAlignment('middle');
+  summarySheet.setRowHeight(lastRow, 50);
+
+
+  createdSheets.push(summarySheet);
 
   if (lastPalletProcessed) {
     var tempSpreadsheet = SpreadsheetApp.create('Temp Spreadsheet for PDF');
@@ -218,3 +270,4 @@ function processForm(sheetName) {
     DriveApp.getFileById(tempSsId).setTrashed(true);
   }
 }
+
