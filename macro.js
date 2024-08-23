@@ -5,6 +5,7 @@ function generateDivisionPalletPDF() {
     return sheet.getName();
   });
 
+
   var ui = SpreadsheetApp.getUi();
   var htmlOutput = HtmlService.createHtmlOutput('<html><body>' +
     '<style>' +
@@ -32,6 +33,7 @@ function generateDivisionPalletPDF() {
     .setHeight(200);
   ui.showModalDialog(htmlOutput, 'Select Sheet');
 }
+
 
 function processForm(sheetName) {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -70,26 +72,21 @@ function processForm(sheetName) {
   var palletNoColumn = startColumn + 1;
   var customerNameColumn = startColumn + 2;
 
-  var currentDivision = '';
-  var currentCustomer = '';
-  var currentPalletNo = '';
   var totalPallets = 0;
 
-  var divisionPalletCount = {};
+  // Find the maximum pallet number
   for (var i = startRow + 1; i < data.length; i++) {
-    var row = data[i];
-    if (row[divisionColumn] && row[divisionColumn].toUpperCase() !== 'TOTAL') {
-      currentDivision = row[divisionColumn];
-      if (!divisionPalletCount[currentDivision]) {
-        divisionPalletCount[currentDivision] = 1;
-      } else {
-        divisionPalletCount[currentDivision]++;
-      }
+    var palletNo = parseInt(data[i][palletNoColumn]);
+    if (!isNaN(palletNo)) {
+      totalPallets = Math.max(totalPallets, palletNo);
     }
   }
 
-  currentDivision = '';
+  var currentDivision = '';
+  var currentCustomer = '';
+  var currentPalletNo = '';
   var lastPalletProcessed = false;
+
   for (var i = startRow + 1; i < data.length; i++) {
     var row = data[i];
 
@@ -101,7 +98,6 @@ function processForm(sheetName) {
       currentDivision = row[divisionColumn];
       currentPalletNo = row[palletNoColumn];
       currentCustomer = row[customerNameColumn];
-      totalPallets = divisionPalletCount[currentDivision];
       var sheetName = currentDivision + " " + currentPalletNo + " OF " + totalPallets;
 
       sheetName = sheetName.replace(/[\/:*?"<>|]/g, '-');
@@ -170,6 +166,16 @@ function processForm(sheetName) {
     }
   }
 
+  var productOrder = [
+    "Idli", "Dosa", "Idli Family", "Dosa Family", "Idli-Dosa Party 2.0",
+    "Dosa Party 2.0", "Jumbo Idli", "Jumbo Dosa", "Organic Idli",
+    "Organic Dosa", "Methi Dosa", "Millet Dosa", "Yellow Lentil Dosa",
+    "Uthappam", "Adai", "Pesarattu", "Ragi Dosa", "Sambar",
+    "Coconut Sambar", "Moong Dhal Sambar", "Mango Dhal", "Rasam",
+    "Lemon Pickles", "Mango Pickles", "Tomato Thokku",
+    "Biriyani Paste", "Chkn Curry Paste"
+  ];
+
   // Create the Summary sheet
   var summarySheet = ss.insertSheet('Summary');
   summarySheet.appendRow(['Summary']);
@@ -177,28 +183,33 @@ function processForm(sheetName) {
 
   summarySheet.getRange('A1:B1').merge().setFontWeight('bold').setFontSize(24)
     .setHorizontalAlignment('center').setVerticalAlignment('middle');
-  summarySheet.getRange('A2:B2').setFontWeight('bold').setFontSize(18)
+  summarySheet.getRange('A2:B2').setFontWeight('bold').setFontSize(18).setBorder(true, true, true, true, true, true)
     .setBackground('#f2f2f2').setHorizontalAlignment('center').setVerticalAlignment('middle');
 
   summarySheet.setColumnWidths(1, 2, 300);
-  summarySheet.setRowHeights(1, 3, 50);
+  summarySheet.setRowHeights(1, 3, 150);
   summarySheet.setRowHeight(2, 50);
 
   var totalQuantitySum = 0;
-  var rowNumber = 3;
-  for (var product in productTotals) {
-    var quantity = productTotals[product];
-    summarySheet.appendRow([product, quantity]);
 
-    // Update the total quantity sum
-    totalQuantitySum += quantity;
+  // Iterate over the products in the custom order
+  for (var i = 0; i < productOrder.length; i++) {
+    var product = productOrder[i];
+    var quantity = productTotals[product] || 0;
 
-    var lastRow = summarySheet.getLastRow();
-    summarySheet.getRange('A' + lastRow + ':B' + lastRow).setBorder(true, true, true, true, true, true)
-      .setFontWeight('normal').setFontSize(16).setBackground(null)
-      .setHorizontalAlignment('center').setVerticalAlignment('middle');
-    summarySheet.setRowHeight(lastRow, 40);
-    rowNumber++;
+    // Only add to the summary sheet if the quantity is greater than 0
+    if (quantity > 0) {
+      summarySheet.appendRow([product, quantity]);
+
+      // Update the total quantity sum
+      totalQuantitySum += quantity;
+
+      var lastRow = summarySheet.getLastRow();
+      summarySheet.getRange('A' + lastRow + ':B' + lastRow).setBorder(true, true, true, true, true, true)
+        .setFontWeight('normal').setFontSize(16).setBackground(null)
+        .setHorizontalAlignment('center').setVerticalAlignment('middle');
+      summarySheet.setRowHeight(lastRow, 40);
+    }
   }
 
   // Insert the Total Quantity row
@@ -211,21 +222,27 @@ function processForm(sheetName) {
   summarySheet.setRowHeight(lastRow, 50);
 
 
+
+
   createdSheets.push(summarySheet);
+
 
   if (lastPalletProcessed) {
     var tempSpreadsheet = SpreadsheetApp.create('Temp Spreadsheet for PDF');
     var tempSsId = tempSpreadsheet.getId();
     var tempSs = SpreadsheetApp.openById(tempSsId);
 
+
     createdSheets.forEach(function (sheet) {
       sheet.copyTo(tempSs).setName(sheet.getName());
     });
+
 
     var tempSheet = tempSs.getSheetByName('Sheet1');
     if (tempSheet) {
       tempSs.deleteSheet(tempSheet);
     }
+
 
     var url = 'https://docs.google.com/spreadsheets/d/' + tempSsId + '/export?';
     var url_ext = 'exportFormat=pdf&format=pdf' +
@@ -240,6 +257,7 @@ function processForm(sheetName) {
       '&left_margin=1.5' +  // Increased left margin
       '&right_margin=1.5';  // Increased right margin
 
+
     var token = ScriptApp.getOAuthToken();
     var response = UrlFetchApp.fetch(url + url_ext, {
       headers: {
@@ -248,10 +266,12 @@ function processForm(sheetName) {
       muteHttpExceptions: true
     });
 
+
     if (response.getResponseCode() == 200) {
       var pdfBlob = response.getBlob().setName(ss.getName() + '.pdf');
       var base64data = Utilities.base64Encode(pdfBlob.getBytes());
       var pdfData = 'data:application/pdf;base64,' + base64data;
+
 
       var htmlOutput = HtmlService.createHtmlOutput(
         "<html><body>" +
@@ -264,10 +284,17 @@ function processForm(sheetName) {
       Logger.log("Failed to fetch PDF with response code: " + response.getResponseCode());
     }
 
+
     createdSheets.forEach(function (sheet) {
       ss.deleteSheet(sheet);
     });
     DriveApp.getFileById(tempSsId).setTrashed(true);
   }
 }
+
+
+
+
+
+
 
